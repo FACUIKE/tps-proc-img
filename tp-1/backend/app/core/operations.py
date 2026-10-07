@@ -34,12 +34,40 @@ class Operation(ABC):
 
 
 class Brightness(Operation):
+    """Adjusts the brightness of the image by `factor`: 0 = black, 1.0 = unchanged.
+
+    How the parameters get here (the other nine operations work the same way):
+
+      1. The client sends `POST /api/images/{id}/brightness` with the JSON body
+         `{"factor": 1.5}`. The fields are optional: `{}` means `factor = 1.0`
+         (but the body itself is required: no body at all is a 422).
+      2. FastAPI parses the body into `schemas.BrightnessIn` and validates the
+         ranges declared there (0 <= factor <= 3). If they are not met it answers
+         422 on its own: this class never sees an out-of-range `factor`.
+      3. The router (`routers/operations.py`) builds the operation with
+         `Brightness(**params.model_dump())`, i.e. `Brightness(factor=1.5)`. The
+         constructor arguments are the schema fields, same names, already typed
+         (`factor` is a `float`) and with the defaults applied.
+      4. The constructor validates the domain rules the schema cannot express
+         (raising `InvalidParameters` -> 400; brightness has none) and passes
+         the values to `super().__init__`. That dict is what `self.parameters`
+         returns and what the service stores in the database and returns in
+         `ImageOut.parameters` (`{"factor": 1.5}`), so it must keep the same keys
+         as the schema.
+      5. The router hands the operation to `ImageService.apply`, which opens the
+         source image and calls `apply(image)`. Inside `apply` the values are read
+         from `self.parameters["factor"]` (or from an attribute the constructor
+         saved, e.g. `self.factor`).
+    """
+
     name = "brightness"
 
     def __init__(self, factor: float = 1.0) -> None:
         super().__init__(factor=factor)
+        self.factor = factor
 
     def apply(self, image: Image.Image) -> Image.Image:
+        factor = self.factor  # the value received in the JSON body, e.g. 1.5
         raise NotImplementedFeature("Brightness")
 
 
