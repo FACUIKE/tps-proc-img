@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TP 2 — Escáner de documentos</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --fg: #1d2330; --muted: #5f6b7a; --border: #e2e5ea; --soft: #f2f4f7;
+    --accent: #3b5bdb; --accent-soft: #e9edff; --warn: #a15c00; --warn-soft: #fff4e2;
+    --ok: #2b7a3b; --ok-soft: #e7f5ea; --code-bg: #f4f5f7;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --fg: #e5e8ee; --muted: #9aa4b3; --border: #2a303b; --soft: #1a1f28;
+      --accent: #7c96ff; --accent-soft: #212a47; --warn: #ffb057; --warn-soft: #33260f;
+      --ok: #6fd08a; --ok-soft: #173020; --code-bg: #1a1f28;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 Georgia, "Iowan Old Style", "Times New Roman", serif; }
+  h1, h2, h3, h4, nav, table, .tag, .callout strong, .caja, .meta { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .contenedor { display: grid; grid-template-columns: 230px minmax(0, 760px); gap: 48px; max-width: 1080px; margin: 0 auto; padding: 48px 24px 96px; }
+  @media (max-width: 900px) { .contenedor { grid-template-columns: 1fr; gap: 24px; } nav.indice { position: static !important; } }
+
+  nav.indice { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+  nav.indice strong { display: block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  nav.indice ol { margin: 0; padding-left: 20px; }
+  nav.indice li { margin: 3px 0; color: var(--muted); }
+  nav.indice a { color: var(--fg); text-decoration: none; }
+  nav.indice a:hover { color: var(--accent); }
+
+  header.portada { border-bottom: 1px solid var(--border); padding-bottom: 24px; margin-bottom: 8px; }
+  .materia { font: 600 13px system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-size: 36px; line-height: 1.15; margin: 8px 0 12px; letter-spacing: -.01em; }
+  .bajada { font-size: 19px; color: var(--muted); margin: 0 0 20px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; color: var(--muted); }
+  .meta b { color: var(--fg); font-weight: 600; }
+
+  h2 { font-size: 24px; margin: 56px 0 12px; padding-top: 8px; letter-spacing: -.005em; }
+  h2 .n { color: var(--accent); margin-right: 8px; }
+  h3 { font-size: 18px; margin: 32px 0 8px; }
+  h4 { font-size: 15px; margin: 20px 0 6px; }
+  p, li { max-width: 70ch; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { font-family: var(--mono); font-size: 13px; line-height: 1.55; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .c { color: var(--muted); }
+
+  .tabla { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.5; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td code { white-space: nowrap; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+
+  .callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 20px 0; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout.ok { border-color: var(--ok); background: var(--ok-soft); }
+  .callout > strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .callout p { margin: 4px 0; }
+
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--soft); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+  .tag.dado { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .tag.hacer { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+  .capas { display: flex; flex-direction: column; gap: 6px; margin: 20px 0; }
+  .caja { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; background: var(--soft); font-size: 14px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .caja b { font-weight: 600; }
+  .caja.core { border: 2px solid var(--warn); background: var(--warn-soft); }
+  .caja span { color: var(--muted); }
+  .flecha { text-align: center; color: var(--muted); font: 13px system-ui, sans-serif; }
+  .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  @media (max-width: 560px) { .fila { grid-template-columns: 1fr; } }
+
+  .pasos { counter-reset: paso; list-style: none; padding-left: 0; }
+  .pasos li { position: relative; padding-left: 36px; margin: 10px 0; }
+  .pasos li::before { counter-increment: paso; content: counter(paso); position: absolute; left: 0; top: 2px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font: 600 13px/24px system-ui, sans-serif; text-align: center; }
+  blockquote { margin: 20px 0; padding: 4px 20px; border-left: 3px solid var(--border); color: var(--muted); font-style: italic; }
+  ol.hitos li { margin-bottom: 6px; }
+  footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+  @media print { nav.indice { display: none; } .contenedor { display: block; } body { font-size: 12pt; } }
+</style>
+</head>
+<body>
+<div class="contenedor">
+
+<nav class="indice" aria-label="Índice">
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#objetivo">Objetivo</a></li>
+    <li><a href="#codigo-base">Código base</a></li>
+    <li><a href="#arquitectura">Arquitectura</a></li>
+    <li><a href="#procesamiento">El procesamiento</a></li>
+    <li><a href="#opciones">Opciones</a></li>
+    <li><a href="#contrato">Contrato de la API</a></li>
+    <li><a href="#almacenamiento">Almacenamiento</a></li>
+    <li><a href="#core">El core <code>docscan</code></a></li>
+    <li><a href="#tests">Tests</a></li>
+    <li><a href="#entrega">Entrega</a></li>
+    <li><a href="#ia">Uso de IA</a></li>
+    <li><a href="#evaluacion">Evaluación</a></li>
+    <li><a href="#extras">Extras</a></li>
+    <li><a href="#faq">Preguntas frecuentes</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="portada">
+  <div class="materia">Trabajo Práctico N.º 2 · Procesamiento de imágenes</div>
+  <h1>Escáner de documentos</h1>
+  <p class="bajada">Diseñar un núcleo reutilizable que convierte la foto de un documento en una imagen limpia y derecha, como si hubiera pasado por un escáner, y exponerlo con una API FastAPI sencilla.</p>
+  <div class="meta">
+    <span><b>Modalidad:</b> en equipos</span>
+    <span><b>Stack:</b> Python · OpenCV · Pillow · NumPy · FastAPI</span>
+    <span><b>Entrega:</b> a definir</span>
+  </div>
+</header>
+
+<!-- ===================================================================== -->
+<h2 id="objetivo"><span class="n">1</span>Objetivo</h2>
+<p>La historia de usuario que guía el trabajo es la siguiente:</p>
+<blockquote>
+  <p>Como usuario, quiero poder cargar una foto de un documento para obtener una versión limpia, derecha y fácil de leer, similar a una imagen escaneada.</p>
+  <p>El sistema deberá identificar automáticamente el documento dentro de la foto, corregir su inclinación y perspectiva, y generar una versión final mejorada.</p>
+  <p>Si no puede reconocer correctamente el documento, deberá informarlo de manera clara.</p>
+  <p>El resultado final deberá poder reutilizarse posteriormente desde distintas aplicaciones sin depender de una interfaz específica.</p>
+</blockquote>
+<p>Además, el usuario tiene que poder <strong>corregir el color</strong> (que el papel se vea blanco aunque la foto tenga una dominante amarilla), <strong>pasar el resultado a escala de grises</strong> (o a blanco y negro puro) y <strong>aclarar los colores muy fuertes</strong>, como los de un resaltador o un sello.</p>
+
+<p>A diferencia del TP 1, esta vez <strong>el backend lo escriben ustedes casi entero</strong>. Se entrega el frontend terminado, los tests de aceptación y un <code>main.py</code> mínimo. El trabajo tiene dos partes:</p>
+<ol>
+  <li><strong>El core, <code>docscan</code>:</strong> un paquete de Python, sin nada de web, que detecta el documento, lo endereza y le aplica las mejoras. Es el corazón del TP.</li>
+  <li><strong>Una API FastAPI sencilla</strong> que usa ese core, guarda los resultados en disco y los expone por HTTP para que el frontend, o cualquier otra aplicación, los consuma. No hay base de datos.</li>
+</ol>
+<p>Los objetivos de aprendizaje son:</p>
+<ul>
+  <li>Resolver un problema real de visión por computadora encadenando técnicas clásicas: suavizado, bordes, contornos, aproximación poligonal y transformación de perspectiva.</li>
+  <li>Trabajar el color: balance de blancos, espacios de color (BGR, HSV, escala de grises) y umbralización.</li>
+  <li>Diseñar un core <strong>reutilizable</strong> y orientado a objetos, que no dependa de la interfaz que lo usa.</li>
+  <li>Construir desde cero una API REST pequeña con FastAPI que cumpla un contrato ya definido.</li>
+</ul>
+
+<!-- ===================================================================== -->
+<h2 id="codigo-base"><span class="n">2</span>Código base</h2>
+<pre><code>tp-2/
+├── enunciado.html            <span class="c">este documento</span>
+├── frontend/                 <span class="tag dado">dado · no modificar</span>
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js
+└── backend/
+    ├── requirements.txt
+    ├── pytest.ini
+    ├── app/                  <span class="c">la API (FastAPI)</span>
+    │   ├── config.py         <span class="tag dado">dado · no modificar</span>  <span class="c">carpeta de almacenamiento, formatos, límite de tamaño</span>
+    │   ├── main.py           <span class="tag dado">dado</span> · <span class="tag hacer">completar</span>  <span class="c">app, CORS, /api/health, routers y archivos estáticos</span>
+    │   ├── schemas.py        <span class="tag dado">dado</span>  <span class="c">contrato de entrada/salida (DetectionOut, ScanOut, ErrorOut)</span>
+    │   ├── routers/
+    │   │   ├── detect.py     <span class="tag hacer">completar</span>  <span class="c">POST /api/detect, hoy responde un ejemplo vacío</span>
+    │   │   └── scan.py       <span class="tag hacer">completar</span>  <span class="c">/api/scans, hoy responden ejemplos vacíos</span>
+    │   └── ...               <span class="tag hacer">hacer</span>  <span class="c">errores, almacenamiento: como lo diseñen</span>
+    ├── docscan/              <span class="tag hacer">hacer</span>  <span class="c">el core: detección, perspectiva, mejoras, CLI</span>
+    │   └── __init__.py
+    ├── tests/
+    │   ├── conftest.py       <span class="tag dado">dado · no modificar</span>
+    │   └── test_contract.py  <span class="tag dado">dado · no modificar</span>  <span class="c">tests de aceptación (79 casos)</span>
+    └── storage/              <span class="c">acá se guardan los escaneos</span></code></pre>
+
+<h3>Cómo levantarlo</h3>
+<pre><code>cd backend
+python -m venv .venv
+source .venv/bin/activate          <span class="c"># Windows: .venv\Scripts\activate</span>
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8765</code></pre>
+<p>Con el servidor corriendo:</p>
+<ul>
+  <li><a href="http://localhost:8765">http://localhost:8765</a>: frontend.</li>
+  <li><a href="http://localhost:8765/docs">http://localhost:8765/docs</a>: documentación interactiva de la API (Swagger). A medida que agreguen endpoints, van a aparecer ahí.</li>
+</ul>
+
+<div class="callout warn">
+  <strong>Estado inicial</strong>
+  <p>Los endpoints ya existen, con sus parámetros y sus schemas (se ven en <code>/docs</code>), pero responden <strong>ejemplos vacíos</strong>: <code>/api/detect</code> devuelve una foto de 0×0 sin esquinas, <code>POST /api/scans</code> un escaneo sin imagen, el listado <code>[]</code>, y no se guarda nada. El trabajo es reemplazar cada <code>TODO</code> por la implementación real usando el core.</p>
+  <p>Los tests de aceptación arrancan fallando: <code>pytest</code> da <em>60 failed, 19 passed</em>. Los que ya pasan son los que valida FastAPI solo con los schemas (opciones fuera de rango, falta el archivo).</p>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="arquitectura"><span class="n">3</span>Arquitectura</h2>
+<p>El core no sabe que existe una web. La API es <em>una</em> de las formas de usarlo; la línea de comandos es otra, y cualquier script de Python puede ser una tercera.</p>
+
+<div class="capas" role="img" aria-label="Diagrama: el frontend y otras apps usan la API por HTTP; la API y la línea de comandos usan el core docscan; la API guarda en disco">
+  <div class="fila">
+    <div class="caja"><b>Frontend</b><span>HTML + JS · dado</span></div>
+    <div class="caja"><b>Otras apps</b><span>curl, un bot, una app móvil…</span></div>
+  </div>
+  <div class="flecha">HTTP / JSON ↓</div>
+  <div class="fila">
+    <div class="caja core"><b>API FastAPI (<code>app/</code>)</b><span>valida, llama al core, guarda y responde</span></div>
+    <div class="caja core"><b>CLI (<code>python -m docscan</code>)</b><span>lee y escribe archivos</span></div>
+  </div>
+  <div class="flecha">llamadas a métodos ↓</div>
+  <div class="caja core"><b>Core <code>docscan</code></b><span>detección · perspectiva · color · OpenCV / Pillow</span></div>
+  <div class="flecha">la API, además ↓</div>
+  <div class="caja"><b>Disco</b><span><code>config.STORAGE_DIR</code> · imágenes + metadatos JSON, servidos en <code>/media</code></span></div>
+</div>
+
+<div class="callout">
+  <strong>Regla de oro</strong>
+  <ul>
+    <li><strong>Todo el procesamiento de imágenes vive en <code>docscan</code>.</strong> Los endpoints no tocan píxeles: reciben bytes, se los pasan al core y guardan lo que devuelve.</li>
+    <li><strong><code>docscan</code> no importa nada de FastAPI, Starlette ni <code>app</code>.</strong> Un test lo verifica.</li>
+    <li><strong>El almacenamiento es de la API</strong>, no del core: el core recibe una imagen y devuelve otra; dónde se guarda es asunto de quien lo usa.</li>
+  </ul>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="procesamiento"><span class="n">4</span>El procesamiento</h2>
+<p>Escanear una foto es aplicar estos pasos, en este orden:</p>
+<ol class="pasos">
+  <li><strong>Abrir la foto respetando la orientación EXIF.</strong> Los celulares guardan los píxeles “acostados” y anotan en el EXIF cómo hay que girarlos. Si no se aplica esa rotación (<code>ImageOps.exif_transpose</code>), el documento sale de costado. Todas las coordenadas del contrato son las de la foto <em>ya girada</em>, como se ve en pantalla.</li>
+  <li><strong>Detectar el documento:</strong> encontrar sus cuatro esquinas. Ver las reglas abajo.</li>
+  <li><strong>Corregir la perspectiva:</strong> llevar esas cuatro esquinas a un rectángulo. El resultado tiene que quedar <em>derecho</em> (la esquina superior izquierda del documento queda arriba a la izquierda, sin espejar) y <em>recortado</em> (sin restos de la mesa).</li>
+  <li><strong>Corrección de color</strong> (si <code>color_correction</code>).</li>
+  <li><strong>Aclarar colores fuertes</strong> (según <code>soften_colors</code>).</li>
+  <li><strong>Modo de color</strong>: color, escala de grises o blanco y negro.</li>
+</ol>
+
+<h3>Detección del documento</h3>
+<p>Un documento se considera <strong>reconocido</strong> cuando se encuentra un cuadrilátero <strong>convexo</strong> que ocupa <strong>al menos el 15&nbsp;% del área</strong> de la foto. Si no lo hay, el core lanza una excepción de dominio (por ejemplo, <code>DocumentNotFound</code>) con un mensaje que explique qué pasó y cómo sacar una mejor foto. Nunca se devuelve “cualquier cosa”: un resultado equivocado es peor que un aviso claro.</p>
+<p>Las esquinas se devuelven en píxeles de la foto, en este orden: <strong>superior izquierda, superior derecha, inferior derecha, inferior izquierda</strong> (sentido horario). Los tests aceptan un error de hasta el 2&nbsp;% de la diagonal de la foto.</p>
+<p>Un camino posible, con OpenCV:</p>
+<ol>
+  <li>Trabajar sobre una copia reducida (por ejemplo, 600&nbsp;px de lado mayor) para ganar velocidad, y al final reescalar las esquinas.</li>
+  <li>Escala de grises y <code>cv2.GaussianBlur</code> para eliminar el ruido.</li>
+  <li><code>cv2.Canny</code> para encontrar bordes y una operación morfológica (<code>cv2.dilate</code> o <code>cv2.morphologyEx</code> con <code>MORPH_CLOSE</code>) para cerrar los huecos.</li>
+  <li><code>cv2.findContours</code>, ordenar por área (<code>cv2.contourArea</code>) y, para los más grandes, aproximar con <code>cv2.approxPolyDP</code> (ε ≈ 2&nbsp;% del perímetro). El primero con 4 vértices y convexo (<code>cv2.isContourConvex</code>) es el documento.</li>
+  <li>Ordenar las esquinas. Truco: la superior izquierda tiene la menor suma <code>x + y</code>, la inferior derecha la mayor, y la diferencia <code>y − x</code> separa las otras dos.</li>
+</ol>
+<p>Pueden mejorarlo: probar también con una umbralización (Otsu), usar la envolvente convexa (<code>cv2.convexHull</code>), descartar contornos que son el borde de la foto, etc.</p>
+
+<h3>Corrección de perspectiva</h3>
+<p>El ancho del resultado es el mayor entre los largos del borde superior e inferior del documento, y el alto, el mayor entre los bordes izquierdo y derecho. Así el documento conserva sus proporciones (una hoja A4 da ≈&nbsp;1,41 de alto por cada 1 de ancho) y su resolución: <strong>no se achica</strong>. Con <code>cv2.getPerspectiveTransform</code> y <code>cv2.warpPerspective</code> se resuelve.</p>
+
+<!-- ===================================================================== -->
+<h2 id="opciones"><span class="n">5</span>Opciones</h2>
+<p>Las mejoras se controlan con tres opciones. Todas son opcionales y tienen un valor por defecto:</p>
+<div class="tabla">
+<table>
+  <thead><tr><th>Opción</th><th>Valores (defecto)</th><th>Comportamiento esperado</th><th>Sugerencia</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>color_mode</code></td>
+      <td><code>"color"</code> | <code>"grayscale"</code> | <code>"bw"</code><br>(<code>"color"</code>)</td>
+      <td><code>color</code>: PNG RGB.<br><code>grayscale</code>: PNG de un solo canal (modo <code>L</code>).<br><code>bw</code>: PNG modo <code>L</code> con <strong>solo</strong> valores 0 y 255: el papel queda blanco puro y la tinta negra.</td>
+      <td><code>cv2.cvtColor</code>, <code>cv2.adaptiveThreshold</code> (mejor que un umbral fijo si hay sombras)</td>
+    </tr>
+    <tr>
+      <td><code>color_correction</code></td>
+      <td>booleano (<code>true</code>)</td>
+      <td>Elimina la dominante de color: el papel queda <strong>blanco y neutro</strong> (R ≈ G ≈ B, cerca de 255) aunque la foto tenga luz cálida. La tinta sigue oscura y los colores del documento se conservan (un sello rojo sigue siendo rojo). Con <code>false</code>, los colores quedan como en la foto.</td>
+      <td>Balance de blancos por canal: estirar cada canal para que el tono del papel (un percentil alto) vaya a 255.</td>
+    </tr>
+    <tr>
+      <td><code>soften_colors</code></td>
+      <td>número de 0 a 1 (<code>0</code>)</td>
+      <td>Aclara los colores <strong>muy fuertes</strong> (saturados y luminosos), acercándolos al blanco. Es gradual: a más valor, más se aclaran; con 0 no cambia nada. El color se aclara pero no desaparece (un rojo queda rosado). <strong>No afecta</strong> al negro, al blanco ni a los grises.</td>
+      <td>Espacio HSV: el peso del aclarado depende de la saturación (S) y del brillo (V) de cada píxel.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+<div class="callout">
+  <strong>Pensar en quien lee</strong>
+  <p>Al aclarar colores, conviene no tocar los trazos oscuros aunque sean de color (la tinta azul de una birome tiene mucha saturación pero poco brillo): el objetivo es que el documento se lea mejor, no borrar lo escrito.</p>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="contrato"><span class="n">6</span>Contrato de la API</h2>
+<p>El frontend y los tests dependen de estos formatos: <strong>no se pueden cambiar</strong> ni las rutas ni los nombres de los campos.</p>
+
+<div class="tabla">
+<table>
+  <thead><tr><th>Método y ruta</th><th>Entrada</th><th>Respuesta</th></tr></thead>
+  <tbody>
+    <tr><td><code>GET /api/health</code></td><td>—</td><td><code>200</code> <code>{"status": "ok"}</code> <span class="tag dado">dado</span></td></tr>
+    <tr><td><code>POST /api/detect</code></td><td><code>multipart/form-data</code>: <code>file</code></td><td><code>200</code> <code>DetectionOut</code>. No guarda nada.</td></tr>
+    <tr><td><code>POST /api/scans</code></td><td><code>multipart/form-data</code>: <code>file</code> + opciones como campos del formulario</td><td><code>201</code> <code>ScanOut</code>. Guarda el escaneo.</td></tr>
+    <tr><td><code>GET /api/scans</code></td><td>—</td><td><code>200</code> lista de <code>ScanOut</code>, <strong>del más nuevo al más viejo</strong>; <code>[]</code> si no hay.</td></tr>
+    <tr><td><code>GET /api/scans/{id}</code></td><td>—</td><td><code>200</code> <code>ScanOut</code>, o <code>404</code></td></tr>
+    <tr><td><code>DELETE /api/scans/{id}</code></td><td>—</td><td><code>204</code> sin cuerpo, o <code>404</code>. Borra <em>todos</em> los archivos del escaneo.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Las opciones viajan como campos del mismo formulario que el archivo. Así se ve un pedido completo:</p>
+<pre><code>curl -F "file=@factura.jpg" \
+     -F "color_mode=grayscale" \
+     -F "color_correction=true" \
+     -F "soften_colors=0.5" \
+     http://localhost:8765/api/scans</code></pre>
+<p>En FastAPI, cada opción es un parámetro con <code>Form()</code> y el archivo uno con <code>File()</code> (<code>UploadFile</code>). Si un valor no respeta el tipo o el rango (<code>color_mode=sepia</code>, <code>soften_colors=1.5</code>…), FastAPI responde <code>422</code> por su cuenta.</p>
+
+<h3>Respuesta: <code>DetectionOut</code></h3>
+<pre><code>{
+  "width": 4032,                           <span class="c">tamaño de la foto (ya girada según EXIF)</span>
+  "height": 3024,
+  "corners": [[812.4, 403.0], [3120.9, 512.7], [2988.1, 2804.2], [701.5, 2650.3]]
+}                                          <span class="c">sup. izq., sup. der., inf. der., inf. izq.</span></code></pre>
+
+<h3>Respuesta: <code>ScanOut</code></h3>
+<pre><code>{
+  "id": "0b6f1c2e9a4d4e0f8c1f3b7a2d9e6c41",
+  "original_name": "factura.jpg",                          <span class="c">el nombre que mandó el usuario</span>
+  "url": "/media/0b6f1c2e9a4d4e0f8c1f3b7a2d9e6c41.png",      <span class="c">el escaneo, siempre PNG</span>
+  "original_url": "/media/0b6f1c2e…-original.jpg",          <span class="c">la foto, tal cual se recibió</span>
+  "width": 2310,                                           <span class="c">del escaneo</span>
+  "height": 3264,
+  "size_bytes": 1843301,                                   <span class="c">tamaño del PNG guardado</span>
+  "corners": [[812.4, 403.0], [3120.9, 512.7], [2988.1, 2804.2], [701.5, 2650.3]],
+  "options": { "color_mode": "grayscale", "color_correction": true, "soften_colors": 0.5 },
+  "created_at": "2026-10-07T15:42:10"                      <span class="c">ISO 8601</span>
+}</code></pre>
+<p><code>options</code> son las opciones <strong>con los valores por defecto ya aplicados</strong>: si el pedido no manda ninguna, vale <code>{"color_mode": "color", "color_correction": true, "soften_colors": 0.0}</code>. <code>GET /api/scans/{id}</code> devuelve exactamente lo mismo que respondió el <code>POST</code>.</p>
+
+<h3>Validación del archivo</h3>
+<p>Los dos endpoints que reciben una foto la validan igual, <strong>en este orden</strong>; la primera regla que falla define la respuesta:</p>
+<ol>
+  <li>Supera <code>config.MAX_UPLOAD_BYTES</code> (10&nbsp;MB) → <code>413</code> <code>FILE_TOO_LARGE</code>.</li>
+  <li>No se puede abrir como imagen (vacío, texto, corrupto) → <code>400</code> <code>INVALID_FILE</code>.</li>
+  <li>Es una imagen, pero no PNG, JPEG, WEBP ni BMP (<code>config.ALLOWED_FORMATS</code>) → <code>400</code> <code>UNSUPPORTED_FORMAT</code>. El formato se detecta por el <strong>contenido</strong>, no por la extensión.</li>
+  <li>No se reconoce un documento → <code>422</code> <code>DOCUMENT_NOT_FOUND</code>. En <code>POST /api/scans</code>, en ese caso no se guarda nada.</li>
+</ol>
+
+<h3>Errores</h3>
+<p>Todos los errores propios usan este formato (el mismo que en el TP 1):</p>
+<pre><code>{
+  "detail": {
+    "code": "DOCUMENT_NOT_FOUND",
+    "message": "No se encontró un documento en la foto. Asegurate de que se vean las cuatro esquinas…"
+  }
+}</code></pre>
+<div class="tabla">
+<table>
+  <thead><tr><th>HTTP</th><th>code</th><th>Cuándo</th></tr></thead>
+  <tbody>
+    <tr><td>400</td><td><code>INVALID_FILE</code></td><td>El archivo no se puede abrir como imagen.</td></tr>
+    <tr><td>400</td><td><code>UNSUPPORTED_FORMAT</code></td><td>Es una imagen de un formato no aceptado (GIF, TIFF…).</td></tr>
+    <tr><td>404</td><td><code>SCAN_NOT_FOUND</code></td><td>No existe un escaneo con ese <code>id</code>.</td></tr>
+    <tr><td>413</td><td><code>FILE_TOO_LARGE</code></td><td>El archivo supera los 10&nbsp;MB.</td></tr>
+    <tr><td>422</td><td><code>DOCUMENT_NOT_FOUND</code></td><td>La foto es válida pero no se reconoce un documento.</td></tr>
+    <tr><td>422</td><td><em>(automático)</em></td><td>Falta el archivo o una opción no respeta su tipo o rango. Lo resuelve FastAPI; su <code>detail</code> es una lista, no un objeto.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>El frontend muestra <code>message</code> al usuario, así que tiene que ser claro y estar en español. La traducción de excepciones de dominio a HTTP se hace en <strong>un único lugar</strong> (un <em>exception handler</em> de FastAPI), no con <code>try/except</code> en cada endpoint.</p>
+
+<!-- ===================================================================== -->
+<h2 id="almacenamiento"><span class="n">7</span>Almacenamiento</h2>
+<p>No hay base de datos. Cada escaneo se guarda como archivos en <code>config.STORAGE_DIR</code>, que FastAPI ya sirve en <code>/media</code>:</p>
+<ul>
+  <li>el escaneo en PNG;</li>
+  <li>la foto original, <strong>byte a byte como se recibió</strong>, con la extensión de su formato;</li>
+  <li>los metadatos del <code>ScanOut</code> en un archivo JSON.</li>
+</ul>
+<p>Una forma simple es usar el <code>id</code> como prefijo de todo: <code>&lt;id&gt;.png</code>, <code>&lt;id&gt;-original.jpg</code> y <code>&lt;id&gt;.json</code>. Reglas:</p>
+<ul>
+  <li>El <code>id</code> y los nombres de archivo los genera el backend (por ejemplo, con <code>uuid.uuid4().hex</code>). <strong>Nunca</strong> se usa el nombre que mandó el usuario para nombrar un archivo.</li>
+  <li>Los escaneos <strong>sobreviven a un reinicio</strong> del servidor: nada puede vivir solo en memoria. Un test levanta un proceso nuevo y busca el escaneo.</li>
+  <li>Al borrar un escaneo no puede quedar ningún archivo suyo en la carpeta.</li>
+  <li>Validen el <code>id</code> que llega por la URL antes de armar una ruta con él: <code>../config</code> no es un id válido.</li>
+  <li>Usen <strong>siempre</strong> <code>config.STORAGE_DIR</code> y <code>config.MEDIA_URL</code>. Los tests redirigen la carpeta con la variable de entorno <code>TP_STORAGE_DIR</code>.</li>
+</ul>
+<p>Encapsulen esto en una clase (por ejemplo, <code>ScanRepository</code> con <code>save</code>, <code>get</code>, <code>list</code> y <code>delete</code>): si mañana se cambia el disco por una base de datos o por S3, solo cambia esa clase.</p>
+
+<!-- ===================================================================== -->
+<h2 id="core"><span class="n">8</span>El core <code>docscan</code></h2>
+<p>El diseño interno es de cada equipo, pero tiene que cumplir estos <strong>requisitos mínimos</strong>:</p>
+<ol>
+  <li><strong>Independiente de la interfaz.</strong> Nada en <code>docscan/</code> importa <code>fastapi</code>, <code>starlette</code> ni <code>app</code>. Trabaja con bytes, arrays de NumPy o imágenes de Pillow, no con <code>UploadFile</code> ni con rutas de la API.</li>
+  <li><strong>Línea de comandos.</strong> Para probar que el core se reutiliza, tiene que poder usarse así (con <code>argparse</code>, en <code>docscan/__main__.py</code>):
+<pre><code>python -m docscan ENTRADA SALIDA [--color-mode {color,grayscale,bw}]
+                                [--no-color-correction] [--soften-colors X]</code></pre>
+    Escribe el escaneo en <code>SALIDA</code> como PNG y termina con código 0. Si no reconoce el documento, explica el motivo por <code>stderr</code>, <strong>no</strong> crea <code>SALIDA</code> y termina con un código distinto de 0.</li>
+  <li><strong>Responsabilidades separadas.</strong> Detectar, enderezar y mejorar son tres cosas distintas, en clases distintas. Debe poder usarse el detector solo (lo necesita <code>/api/detect</code>) o cambiar el algoritmo de detección sin tocar el resto.</li>
+  <li><strong>Mejoras con polimorfismo.</strong> Cada mejora (corrección de color, aclarado, escala de grises, blanco y negro) es una clase con una interfaz común, por ejemplo un <code>Filter</code> abstracto con <code>apply(image) → image</code>. El escáner arma la secuencia de filtros según las opciones y los aplica uno tras otro <strong>sin saber cuál es cuál</strong>. Ningún <code>if/elif</code> sobre el nombre de un filtro dentro del bucle que los aplica; agregar un filtro nuevo (sepia, eliminación de sombras…) no debería requerir tocar los existentes.</li>
+  <li><strong>Excepciones de dominio.</strong> El core lanza sus propias excepciones (<code>InvalidImage</code>, <code>DocumentNotFound</code>…); la API las traduce a HTTP y la CLI, a un mensaje por <code>stderr</code>.</li>
+  <li><strong>Conversión Pillow ↔ OpenCV en un solo lugar.</strong> Pillow trabaja en RGB y OpenCV en BGR: esa conversión no se repite en cada clase.</li>
+  <li><strong>Configurable.</strong> Los parámetros del algoritmo (área mínima, tamaño de trabajo, umbrales) son atributos con valores por defecto, no números mágicos sueltos.</li>
+  <li><strong>Type hints</strong> en todas las firmas públicas y <strong>PEP 8</strong>.</li>
+</ol>
+
+<h3>Así queda un endpoint</h3>
+<p>Si el core está bien diseñado, los endpoints son cortos y no saben de píxeles. Un esbozo:</p>
+<pre><code>@router.post("/scans", status_code=201, response_model=ScanOut)
+async def create_scan(
+    file: UploadFile = File(),
+    color_mode: Literal["color", "grayscale", "bw"] = Form("color"),
+    color_correction: bool = Form(True),
+    soften_colors: float = Form(0.0, ge=0, le=1),
+):
+    content = await read_upload(file)                  <span class="c"># 413 / 400</span>
+    options = ScanOptions(color_mode, color_correction, soften_colors)
+    result = scanner.scan(content, options)            <span class="c"># el core; puede lanzar DocumentNotFound</span>
+    return repository.save(file.filename, content, result, options)</code></pre>
+
+<div class="callout">
+  <strong>Recomendación</strong>
+  <p>Antes de escribir código, dibujen el diagrama de clases (UML) del core y discútanlo en equipo. Ese diagrama es parte de la entrega.</p>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="tests"><span class="n">9</span>Tests</h2>
+<h3>Tests de aceptación (dados)</h3>
+<p><code>tests/test_contract.py</code> es este enunciado escrito como código. Genera fotos sintéticas (una hoja con un cuadrado negro arriba a la izquierda, renglones de “texto” y, a veces, un parche rojo, apoyada torcida o en perspectiva sobre una mesa oscura) y verifica:</p>
+<ul>
+  <li>que las esquinas detectadas estén cerca de las reales, en el orden pedido, también con EXIF;</li>
+  <li>que el escaneo tenga las proporciones de la hoja, que el cuadrado negro quede arriba a la izquierda y que los bordes sean papel, no mesa;</li>
+  <li>cada opción: modos de color, papel amarillento que queda blanco, rojo que se aclara sin tocar el negro ni el blanco;</li>
+  <li>los avisos claros cuando no hay documento (una pared lisa, un círculo, una hoja diminuta), sin guardar nada;</li>
+  <li>la validación del archivo, el almacenamiento, el listado, el borrado y que todo sobreviva a un reinicio;</li>
+  <li>que el core no dependa de la API y que la CLI funcione.</li>
+</ul>
+<pre><code>cd backend
+pytest tests/test_contract.py -v</code></pre>
+<p>Arrancan <strong>60 failed, 19 passed</strong>. <strong>Todos tienen que pasar</strong> y <strong>no se pueden modificar</strong>. Si alguno parece contradecir el enunciado, consúltenlo en el foro en vez de cambiarlo. Los mensajes de error de cada test dicen qué se esperaba.</p>
+
+<h3>Tests propios del equipo</h3>
+<p>Además, en archivos nuevos dentro de <code>backend/tests/</code>:</p>
+<ul>
+  <li><strong>Tests unitarios del core</strong>, sin levantar la API: ordenar esquinas, la corrección de perspectiva de un rectángulo conocido, cada filtro sobre imágenes chicas creadas en memoria (por ejemplo, que la escala de grises tenga un canal o que aclarar colores no cambie un píxel negro).</li>
+  <li><strong>Tests del almacenamiento</strong>: guardar, leer, listar y borrar con una carpeta temporal (<code>tmp_path</code> de pytest).</li>
+  <li><strong>Fotos reales</strong>: sumen al repositorio 3 o 4 fotos propias de documentos (chicas, menos de 1&nbsp;MB) y un test que las escanee. Incluyan al menos una donde el core <em>no</em> deba encontrar un documento.</li>
+</ul>
+<p>Pueden reutilizar los generadores de <code>test_contract.py</code> (<code>from test_contract import photo, document</code>).</p>
+
+<!-- ===================================================================== -->
+<h2 id="entrega"><span class="n">10</span>Entrega</h2>
+<ul>
+  <li>Un repositorio Git por equipo con el historial de commits de todos los integrantes. No se aceptan entregas en un único commit.</li>
+  <li>Un <code>README.md</code> en la raíz con:
+    <ul>
+      <li>integrantes del equipo;</li>
+      <li>instrucciones para instalar, correr la app, usar la CLI y correr los tests;</li>
+      <li>el <strong>diagrama de clases</strong> del core (imagen o Mermaid);</li>
+      <li>las decisiones de diseño y de procesamiento más importantes y su justificación (cómo detectan el documento, cómo corrigen el color, cómo evitaron los <code>if/elif</code>);</li>
+      <li>un ejemplo <em>antes / después</em> con una foto real.</li>
+    </ul>
+  </li>
+  <li>No se suben al repositorio <code>.venv/</code> ni el contenido de <code>storage/</code>.</li>
+</ul>
+
+<h3>Restricciones</h3>
+<ul>
+  <li><strong>No se modifica</strong> nada de <code>frontend/</code>, <code>app/config.py</code>, <code>tests/conftest.py</code> ni <code>tests/test_contract.py</code>.</li>
+  <li>En <code>app/schemas.py</code> no se cambian nombres ni tipos de los campos (pueden agregar validadores o schemas nuevos).</li>
+  <li>En <code>main.py</code> y en los routers pueden agregar lo que necesiten (exception handlers, dependencias), sin cambiar las rutas ni los parámetros.</li>
+  <li>Se pueden agregar dependencias (declaradas en <code>requirements.txt</code>), pero el procesamiento se hace con OpenCV, Pillow y NumPy: nada de librerías que ya “escaneen documentos” ni servicios externos.</li>
+</ul>
+
+<h3>Sugerencia de orden de trabajo</h3>
+<ol class="hitos">
+  <li>Experimentar en un notebook o script con una foto real: bordes, contornos, perspectiva. Entender el problema antes de diseñar.</li>
+  <li>Diagrama de clases del core.</li>
+  <li>Core: abrir la foto (con EXIF), detectar y enderezar. Probarlo con la CLI.</li>
+  <li>API: completar <code>routers/detect.py</code> y el exception handler. Con eso, el frontend ya dibuja el contorno sobre la foto.</li>
+  <li>Almacenamiento y <code>routers/scan.py</code>. El frontend ya muestra el escaneo y la galería.</li>
+  <li>Los filtros de color, uno por uno, con sus tests.</li>
+  <li>Fotos reales, README y diagrama.</li>
+</ol>
+<p>Una forma práctica de repartirse el trabajo es que, una vez acordadas las interfaces, una parte del equipo haga la detección y la perspectiva, otra los filtros y otra la API y el almacenamiento.</p>
+
+<!-- ===================================================================== -->
+<h2 id="ia"><span class="n">11</span>Uso de IA</h2>
+<p>Pueden usar IA, pero como herramienta para aprender, no para resolver el TP. El trabajo existe para que entiendan cómo se encadenan las técnicas de procesamiento y cómo se diseña un core reutilizable; si la IA escribe el código, ese aprendizaje no ocurre. <strong>La fuente principal son los apuntes de la materia</strong> y la documentación de OpenCV y Pillow. La IA viene después, para destrabarse o para contrastar lo que ya pensaron.</p>
+
+<h3>Para qué sí</h3>
+<ul>
+  <li><strong>Discutir la arquitectura del core:</strong> qué clases conviene tener, cómo separar detección y mejoras, cómo agregar un filtro sin tocar los existentes. Tómenlo como una propuesta para discutir en equipo, no como la solución.</li>
+  <li><strong>Hacer preguntas concretas:</strong> ¿qué hace <code>approxPolyDP</code> con su parámetro ε? ¿Por qué un umbral adaptativo funciona mejor que uno fijo con sombras? ¿Qué es la orientación EXIF?</li>
+  <li><strong>Entender un error</strong> que no pudieron resolver solos, después de haber leído el traceback.</li>
+  <li><strong>Revisar código que ya escribieron:</strong> pedir una crítica del diseño o de la legibilidad, no que lo reescriba.</li>
+</ul>
+
+<h3>Para qué no</h3>
+<ul>
+  <li>Pegar el enunciado y pedir el TP resuelto.</li>
+  <li>Pedirle que haga pasar los tests de aceptación.</li>
+  <li>Copiar código que no pueden explicar línea por línea.</li>
+</ul>
+
+<h3>Cómo preguntar</h3>
+<p><strong>Nunca tiren un prompt sin sentido ni sin un objetivo claro.</strong> Un buen prompt da contexto (qué están haciendo y qué ya saben), hace una pregunta puntual y dice qué tipo de respuesta esperan.</p>
+<pre><code><span class="c"># Mal: sin contexto, sin objetivo, pide la solución</span>
+haceme un detector de documentos en opencv
+
+<span class="c"># Bien: contexto, pregunta puntual, respuesta acotada</span>
+Estoy detectando una hoja en una foto con Canny + findContours y
+approxPolyDP. Con fotos sobre una mesa de madera, el contorno más
+grande a veces tiene 6 vértices en vez de 4 porque la veta de la
+madera se pega al borde de la hoja. ¿Qué opciones tengo para
+separarlos? Explicámelas con sus ventajas, sin escribir el código.</code></pre>
+
+<div class="callout warn">
+  <strong>Lo que entregan es de ustedes</strong>
+  <p>Tienen que poder explicar cada línea del código y cada decisión de diseño, usen IA o no. Si una respuesta de la IA contradice los apuntes o este enunciado, manda el enunciado; ante la duda, consulten en el foro.</p>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="evaluacion"><span class="n">12</span>Evaluación</h2>
+<div class="tabla">
+<table>
+  <thead><tr><th>Criterio</th><th>Qué se mira</th><th>Peso</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Funcionalidad</strong></td><td>Todos los tests de aceptación pasan, el frontend funciona de punta a punta y el escáner da buenos resultados con fotos reales.</td><td class="num">35 %</td></tr>
+    <tr><td><strong>Diseño del core</strong></td><td>Cumple los requisitos de la sección 8: independiente de la API, responsabilidades separadas, filtros polimórficos, excepciones de dominio, CLI.</td><td class="num">30 %</td></tr>
+    <tr><td><strong>API</strong></td><td>Endpoints cortos, validación, traducción centralizada de errores, almacenamiento encapsulado y seguro.</td><td class="num">10 %</td></tr>
+    <tr><td><strong>Tests</strong></td><td>Tests propios del core y del almacenamiento, con fotos reales. Comprueban algo concreto.</td><td class="num">15 %</td></tr>
+    <tr><td><strong>Calidad y documentación</strong></td><td>Legibilidad, nombres, type hints, PEP 8, README con diagrama y ejemplo, historial de commits del equipo.</td><td class="num">10 %</td></tr>
+  </tbody>
+</table>
+</div>
+<div class="callout warn">
+  <strong>Condiciones de aprobación</strong>
+  <p>Una entrega <strong>no aprueba</strong> si falla algún test de <code>tests/test_contract.py</code> o si se modificó alguno de los archivos marcados como “no modificar”. Pasar los tests es condición necesaria, no suficiente: el diseño se evalúa aparte, y con fotos reales.</p>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="extras"><span class="n">13</span>Extras (opcionales)</h2>
+<p>Suman puntos solo si todo lo obligatorio está completo. Van en endpoints u opciones nuevas, sin romper el contrato:</p>
+<ul>
+  <li><strong>Esquinas manuales:</strong> si la detección falla, que se puedan mandar las cuatro esquinas a mano (por ejemplo, un campo <code>corners</code> opcional en <code>POST /api/scans</code>).</li>
+  <li><strong>Eliminar sombras:</strong> un filtro nuevo que normalice la iluminación dividiendo por una estimación del fondo (dilatación + desenfoque grande).</li>
+  <li><strong>Exportar a PDF:</strong> <code>GET /api/scans/{id}/pdf</code>, o un PDF de varias páginas a partir de varios escaneos.</li>
+  <li><strong>Orientación automática:</strong> detectar si el texto quedó cabeza abajo o de costado y girarlo.</li>
+  <li><strong>Detección más robusta:</strong> combinar varias estrategias (Canny, Otsu, transformada de Hough) y quedarse con la mejor según algún criterio.</li>
+  <li><strong>Nuevas salidas:</strong> JPEG con calidad configurable, o una miniatura para la galería.</li>
+</ul>
+
+<!-- ===================================================================== -->
+<h2 id="faq"><span class="n">14</span>Preguntas frecuentes</h2>
+<h4>¿Qué pasa si el documento ocupa toda la foto y no se ven sus bordes?</h4>
+<p>Para este TP, eso es “no se reconoce el documento”: hay que informarlo. Resolverlo bien es un extra.</p>
+<h4>¿Por qué 422 si no se encuentra el documento?</h4>
+<p>Porque el pedido es válido (la foto se pudo abrir) pero no se puede procesar. El frontend lo distingue del 422 automático de FastAPI por el <code>code</code>.</p>
+<h4>Mis esquinas están bien pero el escaneo sale espejado o girado 90°.</h4>
+<p>Revisen el orden de las esquinas: el de origen y el de destino de <code>getPerspectiveTransform</code> tienen que coincidir (sup. izq., sup. der., inf. der., inf. izq.). Y que <code>cv2</code> trabaja con <code>(x, y)</code> en los puntos pero <code>array[y, x]</code> al indexar.</p>
+<h4>El frontend dice “Server disconnected”.</h4>
+<p>El backend no está corriendo. Ábranlo desde el propio backend (<code>http://localhost:8765</code>). Si lo sirven con otra herramienta o en otro puerto, agreguen <code>?api=http://localhost:PUERTO</code> a la URL.</p>
+<h4>¿Puedo usar <code>cv2.imdecode</code> en lugar de Pillow para abrir la foto?</h4>
+<p>Sí, pero OpenCV no aplica la orientación EXIF al decodificar desde memoria, y Pillow además les da el formato de la imagen para validarlo. Lo más simple es abrir con Pillow y convertir a NumPy.</p>
+<h4>Los tests pasan pero con mis fotos no anda.</h4>
+<p>Es esperable: las fotos sintéticas son fáciles. Prueben con fondos con textura, sombras y poca luz, y ajusten el algoritmo. Eso también se evalúa.</p>
+
+<footer>TP 2 · Escáner de documentos · Ante cualquier duda, consultar en el foro de la materia.</footer>
+</main>
+</div>
+</body>
+</html>
