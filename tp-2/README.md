@@ -30,10 +30,13 @@ pytest tests/test_contract.py -v
 ```
 
 Se entregan el frontend, los tests, los schemas (`app/schemas.py`) y los routers
-(`app/routers/`) con los endpoints declarados, que por ahora responden ejemplos vacíos. Falta el
-core `docscan` (detección del documento, corrección de perspectiva, mejoras de color y la CLI), el
-almacenamiento, el manejo de errores y completar cada endpoint. En el estado inicial los tests dan
-`60 failed, 19 passed`; el trabajo del equipo es lograr que pasen todos.
+(`app/routers/`) con los endpoints declarados, que por ahora responden ejemplos vacíos. También
+viene resuelto todo lo de abrir imágenes y validar: `docscan/imageio.py` (abre la foto con EXIF,
+convierte Pillow ↔ OpenCV, codifica el PNG), `docscan/exceptions.py`, `app/uploads.py` (validación
+del archivo subido) y `app/errors.py` (traducción de excepciones a HTTP). Falta la detección del
+documento, la corrección de perspectiva, los filtros, la CLI, el almacenamiento y completar cada
+endpoint. En el estado inicial los tests dan `48 failed, 31 passed`; el trabajo del equipo es lograr
+que pasen todos.
 
 ## Integrantes
 

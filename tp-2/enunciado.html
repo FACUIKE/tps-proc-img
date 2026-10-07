@@ -159,14 +159,19 @@
     ├── pytest.ini
     ├── app/                  <span class="c">la API (FastAPI)</span>
     │   ├── config.py         <span class="tag dado">dado · no modificar</span>  <span class="c">carpeta de almacenamiento, formatos, límite de tamaño</span>
-    │   ├── main.py           <span class="tag dado">dado</span> · <span class="tag hacer">completar</span>  <span class="c">app, CORS, /api/health, routers y estáticos; falta el exception handler</span>
+    │   ├── main.py           <span class="tag dado">dado</span>  <span class="c">app, CORS, /api/health, exception handlers, routers y estáticos</span>
     │   ├── schemas.py        <span class="tag dado">dado</span>  <span class="c">contrato de entrada/salida (DetectionOut, ScanOut, ErrorOut)</span>
+    │   ├── errors.py         <span class="tag dado">dado</span>  <span class="c">ApiError, ScanNotFound y la traducción de excepciones a HTTP</span>
+    │   ├── uploads.py        <span class="tag dado">dado</span>  <span class="c">read_upload: lee y valida la foto subida (413 / 400)</span>
     │   ├── routers/          <span class="c">endpoints ya declarados (rutas, parámetros, schemas)</span>
     │   │   ├── detect.py     <span class="tag hacer">completar</span>  <span class="c">POST /api/detect, hoy responde un ejemplo vacío</span>
     │   │   └── scan.py       <span class="tag hacer">completar</span>  <span class="c">/api/scans, hoy responden ejemplos vacíos</span>
-    │   └── ...               <span class="tag hacer">hacer</span>  <span class="c">errores, almacenamiento: como lo diseñen</span>
-    ├── docscan/              <span class="tag hacer">hacer</span>  <span class="c">el core: detección, perspectiva, mejoras, CLI</span>
-    │   └── __init__.py
+    │   └── ...               <span class="tag hacer">hacer</span>  <span class="c">almacenamiento de los escaneos: como lo diseñen</span>
+    ├── docscan/              <span class="c">el core</span>
+    │   ├── __init__.py
+    │   ├── exceptions.py     <span class="tag dado">dado</span>  <span class="c">ScanError, InvalidImage, DocumentNotFound</span>
+    │   ├── imageio.py        <span class="tag dado">dado</span>  <span class="c">read_photo (con EXIF), Pillow ↔ OpenCV, encode_png</span>
+    │   └── ...               <span class="tag hacer">hacer</span>  <span class="c">detección, perspectiva, filtros, escáner, CLI (__main__.py)</span>
     ├── tests/
     │   ├── conftest.py       <span class="tag dado">dado · no modificar</span>
     │   └── test_contract.py  <span class="tag dado">dado · no modificar</span>  <span class="c">tests de aceptación (79 casos)</span>
@@ -186,8 +191,9 @@ uvicorn app.main:app --reload --port 8765</code></pre>
 
 <div class="callout warn">
   <strong>Estado inicial</strong>
-  <p>Los endpoints ya existen, con sus parámetros y sus schemas (se ven en <code>/docs</code>), pero responden <strong>ejemplos vacíos</strong>: <code>/api/detect</code> devuelve una foto de 0×0 sin esquinas, <code>POST /api/scans</code> un escaneo sin imagen, el listado <code>[]</code>, y no se guarda nada. El trabajo es reemplazar cada <code>TODO</code> por la implementación real usando el core.</p>
-  <p>Los tests de aceptación arrancan fallando: <code>pytest</code> da <em>60 failed, 19 passed</em>. Los que ya pasan son los que valida FastAPI solo con los schemas (opciones fuera de rango, falta el archivo).</p>
+  <p>Los endpoints ya existen, con sus parámetros y sus schemas (se ven en <code>/docs</code>), pero responden <strong>ejemplos vacíos</strong>: <code>/api/detect</code> devuelve el tamaño de la foto sin esquinas, <code>POST /api/scans</code> un escaneo sin imagen, el listado <code>[]</code>, y no se guarda nada. El trabajo es reemplazar cada <code>TODO</code> por la implementación real usando el core.</p>
+  <p>Lo que <strong>ya está resuelto</strong>: abrir la foto (formato por contenido y orientación EXIF), validar la subida (tamaño, archivo inválido, formato no soportado), la conversión Pillow ↔ OpenCV, codificar el PNG, las excepciones de dominio y su traducción a HTTP.</p>
+  <p>Los tests de aceptación arrancan fallando: <code>pytest</code> da <em>48 failed, 31 passed</em>. Los que ya pasan son los de validación del archivo y de las opciones.</p>
 </div>
 
 <!-- ===================================================================== -->
@@ -223,7 +229,7 @@ uvicorn app.main:app --reload --port 8765</code></pre>
 <h2 id="procesamiento"><span class="n">4</span>El procesamiento</h2>
 <p>Escanear una foto es aplicar estos pasos, en este orden:</p>
 <ol class="pasos">
-  <li><strong>Abrir la foto respetando la orientación EXIF.</strong> Los celulares guardan los píxeles “acostados” y anotan en el EXIF cómo hay que girarlos. Si no se aplica esa rotación (<code>ImageOps.exif_transpose</code>), el documento sale de costado. Todas las coordenadas del contrato son las de la foto <em>ya girada</em>, como se ve en pantalla.</li>
+  <li><strong>Abrir la foto respetando la orientación EXIF</strong> <span class="tag dado">dado: <code>docscan.read_photo</code></span>. Los celulares guardan los píxeles “acostados” y anotan en el EXIF cómo hay que girarlos. Si no se aplica esa rotación (<code>ImageOps.exif_transpose</code>), el documento sale de costado. Todas las coordenadas del contrato son las de la foto <em>ya girada</em>, como se ve en pantalla.</li>
   <li><strong>Detectar el documento:</strong> encontrar sus cuatro esquinas. Ver las reglas abajo.</li>
   <li><strong>Corregir la perspectiva:</strong> llevar esas cuatro esquinas a un rectángulo. El resultado tiene que quedar <em>derecho</em> (la esquina superior izquierda del documento queda arriba a la izquierda, sin espejar) y <em>recortado</em> (sin restos de la mesa).</li>
   <li><strong>Corrección de color</strong> (si <code>color_correction</code>).</li>
@@ -329,7 +335,7 @@ uvicorn app.main:app --reload --port 8765</code></pre>
 <p><code>options</code> son las opciones <strong>con los valores por defecto ya aplicados</strong>: si el pedido no manda ninguna, vale <code>{"color_mode": "color", "color_correction": true, "soften_colors": 0.0}</code>. <code>GET /api/scans/{id}</code> devuelve exactamente lo mismo que respondió el <code>POST</code>.</p>
 
 <h3>Validación del archivo</h3>
-<p>Los dos endpoints que reciben una foto la validan igual, <strong>en este orden</strong>; la primera regla que falla define la respuesta:</p>
+<p>Los dos endpoints que reciben una foto la validan igual, <strong>en este orden</strong>; la primera regla que falla define la respuesta. Las reglas 1 a 3 ya las resuelve <code>app/uploads.py</code> (<code>read_upload</code>), que los routers ya llaman; la 4 la tienen que lanzar ustedes desde el core.</p>
 <ol>
   <li>Supera <code>config.MAX_UPLOAD_BYTES</code> (10&nbsp;MB) → <code>413</code> <code>FILE_TOO_LARGE</code>.</li>
   <li>No se puede abrir como imagen (vacío, texto, corrupto) → <code>400</code> <code>INVALID_FILE</code>.</li>
@@ -358,7 +364,11 @@ uvicorn app.main:app --reload --port 8765</code></pre>
   </tbody>
 </table>
 </div>
-<p>El frontend muestra <code>message</code> al usuario, así que tiene que ser claro y estar en español. La traducción de excepciones de dominio a HTTP se hace en <strong>un único lugar</strong> (un <em>exception handler</em> de FastAPI), no con <code>try/except</code> en cada endpoint.</p>
+<p>El frontend muestra <code>message</code> al usuario, así que tiene que ser claro y estar en español. La traducción de excepciones a HTTP ya está hecha, en <strong>un único lugar</strong>: <code>app/errors.py</code>, registrado en <code>main.py</code>. Por eso los endpoints no llevan <code>try/except</code>:</p>
+<ul>
+  <li>las excepciones del core (<code>docscan.ScanError</code> y sus subclases) se traducen con la tabla <code>CORE_ERRORS</code>: <code>InvalidImage</code> → <code>400 INVALID_FILE</code>, <code>DocumentNotFound</code> → <code>422 DOCUMENT_NOT_FOUND</code>. Si crean subclases propias, heredan la entrada de su clase padre;</li>
+  <li>los errores de la API se lanzan como <code>ApiError(status, code, message)</code>. Para un id inexistente ya existe <code>ScanNotFound(scan_id)</code> → <code>404 SCAN_NOT_FOUND</code>.</li>
+</ul>
 
 <!-- ===================================================================== -->
 <h2 id="almacenamiento"><span class="n">7</span>Almacenamiento</h2>
@@ -376,7 +386,7 @@ uvicorn app.main:app --reload --port 8765</code></pre>
   <li>Validen el <code>id</code> que llega por la URL antes de armar una ruta con él: <code>../config</code> no es un id válido.</li>
   <li>Usen <strong>siempre</strong> <code>config.STORAGE_DIR</code> y <code>config.MEDIA_URL</code>. Los tests redirigen la carpeta con la variable de entorno <code>TP_STORAGE_DIR</code>.</li>
 </ul>
-<p>Encapsulen esto en una clase (por ejemplo, <code>ScanRepository</code> con <code>save</code>, <code>get</code>, <code>list</code> y <code>delete</code>): si mañana se cambia el disco por una base de datos o por S3, solo cambia esa clase.</p>
+<p>Encapsulen esto en una clase (por ejemplo, <code>ScanRepository</code> con <code>save</code>, <code>get</code>, <code>list</code> y <code>delete</code>, que lanza <code>ScanNotFound</code> si el id no existe): si mañana se cambia el disco por una base de datos o por S3, solo cambia esa clase.</p>
 
 <!-- ===================================================================== -->
 <h2 id="core"><span class="n">8</span>El core <code>docscan</code></h2>
@@ -389,8 +399,8 @@ uvicorn app.main:app --reload --port 8765</code></pre>
     Escribe el escaneo en <code>SALIDA</code> como PNG y termina con código 0. Si no reconoce el documento, explica el motivo por <code>stderr</code>, <strong>no</strong> crea <code>SALIDA</code> y termina con un código distinto de 0.</li>
   <li><strong>Responsabilidades separadas.</strong> Detectar, enderezar y mejorar son tres cosas distintas, en clases distintas. Debe poder usarse el detector solo (lo necesita <code>/api/detect</code>) o cambiar el algoritmo de detección sin tocar el resto.</li>
   <li><strong>Mejoras con polimorfismo.</strong> Cada mejora (corrección de color, aclarado, escala de grises, blanco y negro) es una clase con una interfaz común, por ejemplo un <code>Filter</code> abstracto con <code>apply(image) → image</code>. El escáner arma la secuencia de filtros según las opciones y los aplica uno tras otro <strong>sin saber cuál es cuál</strong>. Ningún <code>if/elif</code> sobre el nombre de un filtro dentro del bucle que los aplica; agregar un filtro nuevo (sepia, eliminación de sombras…) no debería requerir tocar los existentes.</li>
-  <li><strong>Excepciones de dominio.</strong> El core lanza sus propias excepciones (<code>InvalidImage</code>, <code>DocumentNotFound</code>…); la API las traduce a HTTP y la CLI, a un mensaje por <code>stderr</code>.</li>
-  <li><strong>Conversión Pillow ↔ OpenCV en un solo lugar.</strong> Pillow trabaja en RGB y OpenCV en BGR: esa conversión no se repite en cada clase.</li>
+  <li><strong>Excepciones de dominio.</strong> Usen las de <code>docscan/exceptions.py</code> (dadas): el detector lanza <code>DocumentNotFound</code> con un mensaje claro. La API ya las traduce a HTTP; la CLI tiene que mostrarlas como un mensaje por <code>stderr</code>.</li>
+  <li><strong>Imágenes de OpenCV en todo el core.</strong> <code>read_photo</code> (dado) devuelve un <code>Photo</code> con <code>format</code> y una <code>image</code> BGR ya derecha según EXIF, y <code>encode_png</code> (dado) la guarda. La conversión Pillow ↔ OpenCV vive solo en <code>docscan/imageio.py</code> (<code>to_pil</code>, <code>from_pil</code>): no la repitan en cada clase.</li>
   <li><strong>Configurable.</strong> Los parámetros del algoritmo (área mínima, tamaño de trabajo, umbrales) son atributos con valores por defecto, no números mágicos sueltos.</li>
   <li><strong>Type hints</strong> en todas las firmas públicas y <strong>PEP 8</strong>.</li>
 </ol>
@@ -405,13 +415,16 @@ async def create_scan(
     soften_colors: Annotated[float, Form(ge=0, le=1)] = 0.0,
 ):
     options = ScanOptions(color_mode=color_mode, color_correction=color_correction, soften_colors=soften_colors)
-    <span class="c"># TODO (team): validate the file, scan it with docscan and save the result.</span>
-    return empty_scan(original_name=file.filename or "", options=options)</code></pre>
+    upload = await read_upload(file)  <span class="c"># given: 413 FILE_TOO_LARGE / 400 INVALID_FILE / 400 UNSUPPORTED_FORMAT</span>
+    <span class="c"># TODO (team): scan upload.photo.image with docscan, save the result (PNG), the original</span>
+    <span class="c"># photo (upload.content) and the metadata, and return the saved scan.</span>
+    return empty_scan(original_name=upload.name, options=options)</code></pre>
+<p><code>upload</code> trae el nombre que mandó el usuario (<code>upload.name</code>), los bytes tal cual llegaron (<code>upload.content</code>, para guardar el original) y la foto lista para el core (<code>upload.photo.image</code>, BGR, y <code>upload.photo.format</code>).</p>
 <p>Se reemplaza el <code>TODO</code> y el <code>empty_scan</code> (que después se borra) por llamadas al core y al almacenamiento. Si el core está bien diseñado, el endpoint sigue siendo corto y no sabe de píxeles. Un esbozo:</p>
-<pre><code>    content = await read_upload(file)                  <span class="c"># 413 / 400</span>
-    result = scanner.scan(content, options)            <span class="c"># el core; puede lanzar DocumentNotFound</span>
-    return repository.save(file.filename, content, result, options)</code></pre>
-<p>Los errores no se atrapan en el endpoint: los traduce el <em>exception handler</em> que registren en <code>main.py</code>.</p>
+<pre><code>    upload = await read_upload(file)
+    result = scanner.scan(upload.photo.image, options)  <span class="c"># el core; puede lanzar DocumentNotFound</span>
+    return repository.save(upload, result, options)</code></pre>
+<p>Los errores no se atrapan en el endpoint: los traduce <code>app/errors.py</code>.</p>
 
 <div class="callout">
   <strong>Recomendación</strong>
@@ -432,7 +445,7 @@ async def create_scan(
 </ul>
 <pre><code>cd backend
 pytest tests/test_contract.py -v</code></pre>
-<p>Arrancan <strong>60 failed, 19 passed</strong>. <strong>Todos tienen que pasar</strong> y <strong>no se pueden modificar</strong>. Si alguno parece contradecir el enunciado, consúltenlo en el foro en vez de cambiarlo. Los mensajes de error de cada test dicen qué se esperaba.</p>
+<p>Arrancan <strong>48 failed, 31 passed</strong>. <strong>Todos tienen que pasar</strong> y <strong>no se pueden modificar</strong>. Si alguno parece contradecir el enunciado, consúltenlo en el foro en vez de cambiarlo. Los mensajes de error de cada test dicen qué se esperaba.</p>
 
 <h3>Tests propios del equipo</h3>
 <p>Además, en archivos nuevos dentro de <code>backend/tests/</code>:</p>
@@ -463,7 +476,8 @@ pytest tests/test_contract.py -v</code></pre>
 <ul>
   <li><strong>No se modifica</strong> nada de <code>frontend/</code>, <code>app/config.py</code>, <code>tests/conftest.py</code> ni <code>tests/test_contract.py</code>.</li>
   <li>En <code>app/schemas.py</code> no se cambian nombres ni tipos de los campos (pueden agregar validadores o schemas nuevos).</li>
-  <li>En <code>main.py</code> y en los routers pueden agregar lo que necesiten (exception handlers, dependencias), sin cambiar las rutas ni los parámetros.</li>
+  <li>En <code>main.py</code> y en los routers pueden agregar lo que necesiten (dependencias, routers nuevos), sin cambiar las rutas ni los parámetros.</li>
+  <li>Los archivos marcados como <span class="tag dado">dado</span> se pueden extender (por ejemplo, una excepción nueva en <code>exceptions.py</code> o una entrada en <code>CORE_ERRORS</code>), pero no hace falta.</li>
   <li>Se pueden agregar dependencias (declaradas en <code>requirements.txt</code>), pero el procesamiento se hace con OpenCV, Pillow y NumPy: nada de librerías que ya “escaneen documentos” ni servicios externos.</li>
 </ul>
 
@@ -471,8 +485,9 @@ pytest tests/test_contract.py -v</code></pre>
 <ol class="hitos">
   <li>Experimentar en un notebook o script con una foto real: bordes, contornos, perspectiva. Entender el problema antes de diseñar.</li>
   <li>Diagrama de clases del core.</li>
-  <li>Core: abrir la foto (con EXIF), detectar y enderezar. Probarlo con la CLI.</li>
-  <li>API: el exception handler en <code>main.py</code> y completar <code>routers/detect.py</code>. Con eso, el frontend ya dibuja el contorno sobre la foto.</li>
+  <li>Leer lo dado: <code>docscan/imageio.py</code>, <code>docscan/exceptions.py</code>, <code>app/uploads.py</code> y <code>app/errors.py</code>.</li>
+  <li>Core: detectar y enderezar (partiendo de <code>read_photo</code>). Probarlo con la CLI.</li>
+  <li>API: completar <code>routers/detect.py</code>. Con eso, el frontend ya dibuja el contorno sobre la foto.</li>
   <li>Almacenamiento y <code>routers/scan.py</code>. El frontend ya muestra el escaneo y la galería.</li>
   <li>Los filtros de color, uno por uno, con sus tests.</li>
   <li>Fotos reales, README y diagrama.</li>
@@ -523,7 +538,7 @@ separarlos? Explicámelas con sus ventajas, sin escribir el código.</code></pre
   <tbody>
     <tr><td><strong>Funcionalidad</strong></td><td>Todos los tests de aceptación pasan, el frontend funciona de punta a punta y el escáner da buenos resultados con fotos reales.</td><td class="num">35 %</td></tr>
     <tr><td><strong>Diseño del core</strong></td><td>Cumple los requisitos de la sección 8: independiente de la API, responsabilidades separadas, filtros polimórficos, excepciones de dominio, CLI.</td><td class="num">30 %</td></tr>
-    <tr><td><strong>API</strong></td><td>Endpoints cortos, validación, traducción centralizada de errores, almacenamiento encapsulado y seguro.</td><td class="num">10 %</td></tr>
+    <tr><td><strong>API</strong></td><td>Endpoints cortos que delegan en el core y usan lo dado (<code>read_upload</code>, las excepciones), almacenamiento encapsulado y seguro.</td><td class="num">10 %</td></tr>
     <tr><td><strong>Tests</strong></td><td>Tests propios del core y del almacenamiento, con fotos reales. Comprueban algo concreto.</td><td class="num">15 %</td></tr>
     <tr><td><strong>Calidad y documentación</strong></td><td>Legibilidad, nombres, type hints, PEP 8, README con diagrama y ejemplo, historial de commits del equipo.</td><td class="num">10 %</td></tr>
   </tbody>
@@ -556,8 +571,8 @@ separarlos? Explicámelas con sus ventajas, sin escribir el código.</code></pre
 <p>Revisen el orden de las esquinas: el de origen y el de destino de <code>getPerspectiveTransform</code> tienen que coincidir (sup. izq., sup. der., inf. der., inf. izq.). Y que <code>cv2</code> trabaja con <code>(x, y)</code> en los puntos pero <code>array[y, x]</code> al indexar.</p>
 <h4>El frontend dice “Server disconnected”.</h4>
 <p>El backend no está corriendo. Ábranlo desde el propio backend (<code>http://localhost:8765</code>). Si lo sirven con otra herramienta o en otro puerto, agreguen <code>?api=http://localhost:PUERTO</code> a la URL.</p>
-<h4>¿Puedo usar <code>cv2.imdecode</code> en lugar de Pillow para abrir la foto?</h4>
-<p>Sí, pero OpenCV no aplica la orientación EXIF al decodificar desde memoria, y Pillow además les da el formato de la imagen para validarlo. Lo más simple es abrir con Pillow y convertir a NumPy.</p>
+<h4>¿Por qué se abre la foto con Pillow y no con <code>cv2.imdecode</code>?</h4>
+<p>Porque OpenCV no aplica la orientación EXIF al decodificar desde memoria, y Pillow además da el formato de la imagen para validarlo. <code>read_photo</code> abre con Pillow y entrega un array de OpenCV: de ahí en adelante trabajen con OpenCV y NumPy.</p>
 <h4>Los tests pasan pero con mis fotos no anda.</h4>
 <p>Es esperable: las fotos sintéticas son fáciles. Prueben con fondos con textura, sombras y poca luz, y ajusten el algoritmo. Eso también se evalúa.</p>
 
