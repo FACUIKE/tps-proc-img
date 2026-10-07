@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, UploadFile, status
 
 from app.schemas import ColorMode, ErrorOut, ScanOptions, ScanOut
+from app.uploads import read_upload
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
 
@@ -31,8 +32,10 @@ async def create_scan(
     soften_colors: Annotated[float, Form(ge=0, le=1)] = 0.0,
 ):
     options = ScanOptions(color_mode=color_mode, color_correction=color_correction, soften_colors=soften_colors)
-    # TODO (team): validate the file, scan it with docscan and save the result.
-    return empty_scan(original_name=file.filename or "", options=options)
+    upload = await read_upload(file)  # given: 413 FILE_TOO_LARGE / 400 INVALID_FILE / 400 UNSUPPORTED_FORMAT
+    # TODO (team): scan upload.photo.image with docscan, save the result (PNG), the original
+    # photo (upload.content) and the metadata, and return the saved scan.
+    return empty_scan(original_name=upload.name, options=options)
 
 
 @router.get("", response_model=list[ScanOut], summary="List the scans, newest first")

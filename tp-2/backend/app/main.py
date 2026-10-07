@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import FRONTEND_DIR, MEDIA_URL, STORAGE_DIR
+from app.errors import register_exception_handlers
 from app.routers import detect, scan
 
 
@@ -21,6 +22,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+
 # Allows opening the frontend from another origin (e.g. Live Server on :5500).
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +37,9 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
+
+# Domain exceptions (core and API) → {"detail": {"code", "message"}} responses.
+register_exception_handlers(app)
 
 app.include_router(detect.router)
 app.include_router(scan.router)
