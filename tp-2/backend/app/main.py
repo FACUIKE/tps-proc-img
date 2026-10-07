@@ -3,6 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+
+from docscan import ScanError
 
 from app.config import FRONTEND_DIR, MEDIA_URL, STORAGE_DIR
 from app.routers import detect, scan
@@ -20,6 +23,12 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(ScanError)
+async def scan_error_handler(request, exc: ScanError):
+    status_code = {"FILE_TOO_LARGE": 413, "DOCUMENT_NOT_FOUND": 422}.get(exc.code, 400)
+    return JSONResponse(status_code=status_code, content={"detail": {"code": exc.code, "message": str(exc)}})
 
 # Allows opening the frontend from another origin (e.g. Live Server on :5500).
 app.add_middleware(

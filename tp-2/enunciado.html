@@ -159,9 +159,9 @@
     ├── pytest.ini
     ├── app/                  <span class="c">la API (FastAPI)</span>
     │   ├── config.py         <span class="tag dado">dado · no modificar</span>  <span class="c">carpeta de almacenamiento, formatos, límite de tamaño</span>
-    │   ├── main.py           <span class="tag dado">dado</span> · <span class="tag hacer">completar</span>  <span class="c">app, CORS, /api/health, routers y archivos estáticos</span>
+    │   ├── main.py           <span class="tag dado">dado</span> · <span class="tag hacer">completar</span>  <span class="c">app, CORS, /api/health, routers y estáticos; falta el exception handler</span>
     │   ├── schemas.py        <span class="tag dado">dado</span>  <span class="c">contrato de entrada/salida (DetectionOut, ScanOut, ErrorOut)</span>
-    │   ├── routers/
+    │   ├── routers/          <span class="c">endpoints ya declarados (rutas, parámetros, schemas)</span>
     │   │   ├── detect.py     <span class="tag hacer">completar</span>  <span class="c">POST /api/detect, hoy responde un ejemplo vacío</span>
     │   │   └── scan.py       <span class="tag hacer">completar</span>  <span class="c">/api/scans, hoy responden ejemplos vacíos</span>
     │   └── ...               <span class="tag hacer">hacer</span>  <span class="c">errores, almacenamiento: como lo diseñen</span>
@@ -181,7 +181,7 @@ uvicorn app.main:app --reload --port 8765</code></pre>
 <p>Con el servidor corriendo:</p>
 <ul>
   <li><a href="http://localhost:8765">http://localhost:8765</a>: frontend.</li>
-  <li><a href="http://localhost:8765/docs">http://localhost:8765/docs</a>: documentación interactiva de la API (Swagger). A medida que agreguen endpoints, van a aparecer ahí.</li>
+  <li><a href="http://localhost:8765/docs">http://localhost:8765/docs</a>: documentación interactiva de la API (Swagger). Ya muestra todos los endpoints con sus parámetros, schemas y ejemplos de respuesta.</li>
 </ul>
 
 <div class="callout warn">
@@ -304,7 +304,7 @@ uvicorn app.main:app --reload --port 8765</code></pre>
      -F "color_correction=true" \
      -F "soften_colors=0.5" \
      http://localhost:8765/api/scans</code></pre>
-<p>En FastAPI, cada opción es un parámetro con <code>Form()</code> y el archivo uno con <code>File()</code> (<code>UploadFile</code>). Si un valor no respeta el tipo o el rango (<code>color_mode=sepia</code>, <code>soften_colors=1.5</code>…), FastAPI responde <code>422</code> por su cuenta.</p>
+<p>Esos parámetros ya están declarados en <code>routers/scan.py</code>: cada opción con <code>Form()</code> y el archivo con <code>File()</code> (<code>UploadFile</code>). Si un valor no respeta el tipo o el rango (<code>color_mode=sepia</code>, <code>soften_colors=1.5</code>…), FastAPI responde <code>422</code> por su cuenta.</p>
 
 <h3>Respuesta: <code>DetectionOut</code></h3>
 <pre><code>{
@@ -395,19 +395,23 @@ uvicorn app.main:app --reload --port 8765</code></pre>
   <li><strong>Type hints</strong> en todas las firmas públicas y <strong>PEP 8</strong>.</li>
 </ol>
 
-<h3>Así queda un endpoint</h3>
-<p>Si el core está bien diseñado, los endpoints son cortos y no saben de píxeles. Un esbozo:</p>
-<pre><code>@router.post("/scans", status_code=201, response_model=ScanOut)
+<h3>Cómo queda un endpoint</h3>
+<p>Los routers ya declaran cada endpoint con su ruta, sus parámetros y su <code>response_model</code>, y por ahora responden un ejemplo vacío. Por ejemplo, hoy <code>routers/scan.py</code> tiene:</p>
+<pre><code>@router.post("", response_model=ScanOut, status_code=201, ...)
 async def create_scan(
-    file: UploadFile = File(),
-    color_mode: Literal["color", "grayscale", "bw"] = Form("color"),
-    color_correction: bool = Form(True),
-    soften_colors: float = Form(0.0, ge=0, le=1),
+    file: Annotated[UploadFile, File(description="Photo of a document")],
+    color_mode: Annotated[ColorMode, Form()] = "color",
+    color_correction: Annotated[bool, Form()] = True,
+    soften_colors: Annotated[float, Form(ge=0, le=1)] = 0.0,
 ):
-    content = await read_upload(file)                  <span class="c"># 413 / 400</span>
-    options = ScanOptions(color_mode, color_correction, soften_colors)
+    options = ScanOptions(color_mode=color_mode, color_correction=color_correction, soften_colors=soften_colors)
+    <span class="c"># TODO (team): validate the file, scan it with docscan and save the result.</span>
+    return empty_scan(original_name=file.filename or "", options=options)</code></pre>
+<p>Se reemplaza el <code>TODO</code> y el <code>empty_scan</code> (que después se borra) por llamadas al core y al almacenamiento. Si el core está bien diseñado, el endpoint sigue siendo corto y no sabe de píxeles. Un esbozo:</p>
+<pre><code>    content = await read_upload(file)                  <span class="c"># 413 / 400</span>
     result = scanner.scan(content, options)            <span class="c"># el core; puede lanzar DocumentNotFound</span>
     return repository.save(file.filename, content, result, options)</code></pre>
+<p>Los errores no se atrapan en el endpoint: los traduce el <em>exception handler</em> que registren en <code>main.py</code>.</p>
 
 <div class="callout">
   <strong>Recomendación</strong>
@@ -468,7 +472,7 @@ pytest tests/test_contract.py -v</code></pre>
   <li>Experimentar en un notebook o script con una foto real: bordes, contornos, perspectiva. Entender el problema antes de diseñar.</li>
   <li>Diagrama de clases del core.</li>
   <li>Core: abrir la foto (con EXIF), detectar y enderezar. Probarlo con la CLI.</li>
-  <li>API: completar <code>routers/detect.py</code> y el exception handler. Con eso, el frontend ya dibuja el contorno sobre la foto.</li>
+  <li>API: el exception handler en <code>main.py</code> y completar <code>routers/detect.py</code>. Con eso, el frontend ya dibuja el contorno sobre la foto.</li>
   <li>Almacenamiento y <code>routers/scan.py</code>. El frontend ya muestra el escaneo y la galería.</li>
   <li>Los filtros de color, uno por uno, con sus tests.</li>
   <li>Fotos reales, README y diagrama.</li>

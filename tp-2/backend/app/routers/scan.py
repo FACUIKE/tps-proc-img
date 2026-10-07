@@ -2,7 +2,12 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 
+import docscan
+
+from app import config
+from app.repository import ScanRepository
 from app.schemas import ColorMode, ErrorOut, ScanOptions, ScanOut
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
@@ -31,8 +36,16 @@ async def create_scan(
     soften_colors: Annotated[float, Form(ge=0, le=1)] = 0.0,
 ):
     options = ScanOptions(color_mode=color_mode, color_correction=color_correction, soften_colors=soften_colors)
-    # TODO (team): validate the file, scan it with docscan and save the result.
-    return empty_scan(original_name=file.filename or "", options=options)
+    content = await file.read(config.MAX_UPLOAD_BYTES + 1)
+    if len(content) > config.MAX_UPLOAD_BYTES:
+        raise docscan.ScanError("FILE_TOO_LARGE", "El archivo supera el tamaño máximo permitido.")
+    result = await run_in_threadpool(
+        docscan.scan, content, allowed_formats=config.ALLOWED_FORMATS,
+        **options.model_dump(),
+    )
+    return await run_in_threadpool(
+        ScanRepository().save, content, file.filename or "", result, options,
+    )
 
 
 @router.get("", response_model=list[ScanOut], summary="List the scans, newest first")

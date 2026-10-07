@@ -6,3 +6,7 @@ team's work: it must NOT import FastAPI nor anything from `app`, so it can be
 used from the API, from the command line (`python -m docscan`) or from any
 other Python program.
 """
+
+from .scanner import ScanError, ScanResult, scan
+
+__all__ = ["ScanError", "ScanResult", "scan"]
